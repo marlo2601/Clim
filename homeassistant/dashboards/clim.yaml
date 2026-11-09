@@ -1,0 +1,103 @@
+# Tableau de bord "Clim" pour le téléphone.
+# À coller dans : Paramètres > Tableaux de bord > (nouveau tableau) > ⋮ > Modifier >
+# ⋮ > Éditeur de configuration brute.
+title: Clim
+views:
+  - title: Clim
+    path: clim
+    icon: mdi:air-conditioner
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Général
+          - type: tile
+            entity: input_select.clim_saison
+            features:
+              - type: select-options
+            grid_options:
+              columns: full
+          - type: tile
+            entity: zone.home
+            name: Personnes à la maison
+          - type: tile
+            entity: input_number.clim_confort_chaud
+            features:
+              - type: numeric-input
+                style: buttons
+          - type: tile
+            entity: input_number.clim_confort_froid
+            features:
+              - type: numeric-input
+                style: buttons
+          - type: tile
+            entity: input_number.clim_absent_chaud
+            features:
+              - type: numeric-input
+                style: buttons
+          - type: tile
+            entity: input_number.clim_absent_froid
+            features:
+              - type: numeric-input
+                style: buttons
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Salon
+          - type: thermostat
+            entity: climate.salon
+            grid_options:
+              columns: full
+          - type: tile
+            entity: input_boolean.clim_auto_salon
+            name: Pilotage auto
+          - type: tile
+            entity: schedule.clim_salon
+            name: Planning
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Chambre 1
+          - type: thermostat
+            entity: climate.chambre_1
+            grid_options:
+              columns: full
+          - type: tile
+            entity: input_boolean.clim_auto_chambre_1
+            name: Pilotage auto
+          - type: tile
+            entity: schedule.clim_chambre_1
+            name: Planning
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Chambre 2
+          - type: thermostat
+            entity: climate.chambre_2
+            grid_options:
+              columns: full
+          - type: tile
+            entity: input_boolean.clim_auto_chambre_2
+            name: Pilotage auto
+          - type: tile
+            entity: schedule.clim_chambre_2
+            name: Planning
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Bureau
+          - type: thermostat
+            entity: climate.bureau
+            grid_options:
+              columns: full
+          - type: tile
+            entity: input_boolean.clim_auto_bureau
+            name: Pilotage auto
+          - type: tile
+            entity: schedule.clim_bureau
+            name: Planning

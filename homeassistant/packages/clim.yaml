@@ -1,0 +1,115 @@
+# Pilotage des 4 clims Daikin FTXS25K.
+#
+# À adapter :
+#   - les noms des pièces (salon, chambre_1, chambre_2, bureau) ;
+#   - les entités climate.* (noms donnés par les modules Faikin) ;
+#   - les capteurs de présence, si tu en ajoutes.
+#
+# Les plannings (schedule.clim_*) se créent dans l'interface, pour pouvoir les
+# modifier depuis le téléphone : voir le README.
+
+input_select:
+  clim_saison:
+    name: Saison clim
+    icon: mdi:sun-snowflake-variant
+    options:
+      - Chauffage
+      - Climatisation
+      - Arrêt
+
+input_number:
+  clim_confort_chaud:
+    name: Confort chauffage (par défaut)
+    icon: mdi:fire
+    min: 16
+    max: 26
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+  clim_confort_froid:
+    name: Confort clim (par défaut)
+    icon: mdi:snowflake
+    min: 20
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+  clim_absent_chaud:
+    name: Absent chauffage
+    icon: mdi:home-export-outline
+    min: 10
+    max: 22
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+  clim_absent_froid:
+    name: Absent clim
+    icon: mdi:home-export-outline
+    min: 24
+    max: 32
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+
+input_boolean:
+  clim_auto_salon:
+    name: Auto salon
+    icon: mdi:robot
+  clim_auto_chambre_1:
+    name: Auto chambre 1
+    icon: mdi:robot
+  clim_auto_chambre_2:
+    name: Auto chambre 2
+    icon: mdi:robot
+  clim_auto_bureau:
+    name: Auto bureau
+    icon: mdi:robot
+
+automation clim:
+  - id: clim_pilotage_salon
+    alias: Clim – pilotage salon
+    use_blueprint:
+      path: clim/pilotage_clim.yaml
+      input: &commun
+        clim: climate.salon
+        planning: schedule.clim_salon
+        auto: input_boolean.clim_auto_salon
+        saison: input_select.clim_saison
+        confort_chaud: input_number.clim_confort_chaud
+        confort_froid: input_number.clim_confort_froid
+        absent_chaud: input_number.clim_absent_chaud
+        absent_froid: input_number.clim_absent_froid
+        capteurs_presence: []
+        delai_absence: 20
+        presence_telephones: true
+        action_absence: eco
+
+  - id: clim_pilotage_chambre_1
+    alias: Clim – pilotage chambre 1
+    use_blueprint:
+      path: clim/pilotage_clim.yaml
+      input:
+        <<: *commun
+        clim: climate.chambre_1
+        planning: schedule.clim_chambre_1
+        auto: input_boolean.clim_auto_chambre_1
+
+  - id: clim_pilotage_chambre_2
+    alias: Clim – pilotage chambre 2
+    use_blueprint:
+      path: clim/pilotage_clim.yaml
+      input:
+        <<: *commun
+        clim: climate.chambre_2
+        planning: schedule.clim_chambre_2
+        auto: input_boolean.clim_auto_chambre_2
+
+  - id: clim_pilotage_bureau
+    alias: Clim – pilotage bureau
+    use_blueprint:
+      path: clim/pilotage_clim.yaml
+      input:
+        <<: *commun
+        clim: climate.bureau
+        planning: schedule.clim_bureau
+        auto: input_boolean.clim_auto_bureau

@@ -1,0 +1,214 @@
+blueprint:
+  name: Pilotage clim Daikin (planning + présence)
+  description: >
+    Pilote une clim selon un planning horaire, la saison choisie et la présence.
+
+    - Pendant un créneau du planning : la clim tourne à la température du créneau
+      (données `temp_chaud` / `temp_froid` du créneau, sinon les températures
+      de confort par défaut).
+
+    - Hors créneau : la clim est éteinte.
+
+    - Pièce vide depuis X minutes, ou plus personne à la maison : passage en
+      température "absent" (ou arrêt, au choix). Un créneau avec la donnée
+      `ignorer_presence: true` (ex. la nuit) ignore la présence.
+
+    - L'interrupteur "auto" de la pièce permet de suspendre le pilotage.
+  domain: automation
+  input:
+    clim:
+      name: Clim
+      selector:
+        entity:
+          domain: climate
+    planning:
+      name: Planning de la pièce
+      description: Entrée "Planning" (schedule) de la pièce.
+      selector:
+        entity:
+          domain: schedule
+    auto:
+      name: Interrupteur pilotage auto
+      selector:
+        entity:
+          domain: input_boolean
+    saison:
+      name: Sélecteur de saison
+      description: Options attendues "Chauffage", "Climatisation", "Arrêt".
+      selector:
+        entity:
+          domain: input_select
+    confort_chaud:
+      name: Température de confort par défaut (chauffage)
+      selector:
+        entity:
+          domain: input_number
+    confort_froid:
+      name: Température de confort par défaut (climatisation)
+      selector:
+        entity:
+          domain: input_number
+    absent_chaud:
+      name: Température absent (chauffage)
+      selector:
+        entity:
+          domain: input_number
+    absent_froid:
+      name: Température absent (climatisation)
+      selector:
+        entity:
+          domain: input_number
+    capteurs_presence:
+      name: Capteurs de présence de la pièce (facultatif)
+      description: Laisser vide si la pièce n'a pas de capteur.
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    delai_absence:
+      name: Délai avant de considérer la pièce vide (minutes)
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 240
+          unit_of_measurement: min
+    presence_telephones:
+      name: Utiliser la présence des téléphones (zone Maison)
+      description: >
+        Si plus aucun téléphone (app Home Assistant) n'est à la maison,
+        toutes les clims passent en mode absent.
+      default: true
+      selector:
+        boolean:
+    action_absence:
+      name: Que faire en cas d'absence
+      default: eco
+      selector:
+        select:
+          options:
+            - label: Baisser à la température "absent"
+              value: eco
+            - label: Éteindre la clim
+              value: arret
+
+mode: restart
+
+triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: state
+    entity_id: !input planning
+  - trigger: state
+    entity_id:
+      - !input auto
+      - !input saison
+      - !input confort_chaud
+      - !input confort_froid
+      - !input absent_chaud
+      - !input absent_froid
+  - trigger: state
+    entity_id: zone.home
+  - trigger: state
+    entity_id: !input clim
+    from: unavailable
+  - trigger: state
+    entity_id: !input capteurs_presence
+    to: "on"
+  - trigger: state
+    entity_id: !input capteurs_presence
+    to: "off"
+    for:
+      minutes: !input delai_absence
+
+variables:
+  clim: !input clim
+  planning: !input planning
+  auto: !input auto
+  saison: !input saison
+  confort_chaud: !input confort_chaud
+  confort_froid: !input confort_froid
+  absent_chaud: !input absent_chaud
+  absent_froid: !input absent_froid
+  capteurs: !input capteurs_presence
+  delai: !input delai_absence
+  presence_telephones: !input presence_telephones
+  action_absence: !input action_absence
+
+  mode_saison: >
+    {% set s = states(saison) %}
+    {{ 'heat' if s == 'Chauffage' else 'cool' if s == 'Climatisation' else 'off' }}
+  en_creneau: "{{ is_state(planning, 'on') }}"
+  ignorer_presence: "{{ state_attr(planning, 'ignorer_presence') in [true, 'true', 'oui'] }}"
+
+  # Pièce occupée : pas de capteur, un capteur actif, ou dernier mouvement récent.
+  # Un capteur indisponible compte comme "occupé" (on préfère le confort).
+  piece_occupee: >
+    {% set liste = expand(capteurs) %}
+    {% if liste | count == 0 %}
+      true
+    {% else %}
+      {% set tous_off = liste | selectattr('state', 'eq', 'off') | list | count == liste | count %}
+      {% set dernier = liste | map(attribute='last_changed') | max %}
+      {{ not (tous_off and dernier < now() - timedelta(minutes=delai | int)) }}
+    {% endif %}
+  # Maison occupée : au moins une personne à la maison (si des personnes sont suivies).
+  maison_occupee: >
+    {% if not presence_telephones or states.person | count == 0 %}
+      true
+    {% else %}
+      {{ states('zone.home') | int(1) > 0 }}
+    {% endif %}
+  present: "{{ ignorer_presence or (piece_occupee and maison_occupee) }}"
+
+  cible_mode: >
+    {% if mode_saison == 'off' or not en_creneau %}
+      off
+    {% elif not present and action_absence == 'arret' %}
+      off
+    {% else %}
+      {{ mode_saison }}
+    {% endif %}
+  cible_temp: >
+    {% set chaud = mode_saison == 'heat' %}
+    {% if not present %}
+      {{ states(absent_chaud if chaud else absent_froid) | float(18 if chaud else 28) }}
+    {% else %}
+      {% set defaut = states(confort_chaud if chaud else confort_froid) | float(20 if chaud else 26) %}
+      {{ state_attr(planning, 'temp_chaud' if chaud else 'temp_froid') | float(defaut) }}
+    {% endif %}
+
+conditions:
+  - condition: template
+    value_template: "{{ is_state(auto, 'on') }}"
+  - condition: template
+    value_template: "{{ states(clim) not in ['unavailable', 'unknown'] }}"
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ cible_mode == 'off' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ not is_state(clim, 'off') }}"
+            then:
+              - action: climate.turn_off
+                target:
+                  entity_id: "{{ clim }}"
+    default:
+      # On n'envoie un ordre que si quelque chose change (évite les bips inutiles).
+      - if:
+          - condition: template
+            value_template: >
+              {{ not is_state(clim, cible_mode)
+                 or (state_attr(clim, 'temperature') | float(0)) != (cible_temp | float) }}
+        then:
+          - action: climate.set_temperature
+            target:
+              entity_id: "{{ clim }}"
+            data:
+              hvac_mode: "{{ cible_mode }}"
+              temperature: "{{ cible_temp | float }}"
